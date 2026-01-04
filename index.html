@@ -1,0 +1,1652 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+<title>RETRO MUSIC TV</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chicle&display=swap" rel="stylesheet">
+
+
+  <style>
+    :root{
+      --bg: radial-gradient(1200px 800px at 60% 40%, #1b2a3a 0%, #070a0f 60%, #000 100%);
+      --ui: rgba(255,255,255,0.92);
+      --neon: #00f0ff;
+
+      --tvW: min(94vw, 1180px);
+      --shadow: 0 30px 90px rgba(0,0,0,0.65);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg);
+      overflow:hidden;
+      color:var(--ui);
+    }
+
+    /* Background */
+    .bg{
+      position:fixed; inset:0;
+      background:
+        radial-gradient(1200px 800px at 55% 35%, rgba(0,240,255,0.14), transparent 55%),
+        radial-gradient(900px 600px at 30% 70%, rgba(255,255,255,0.06), transparent 60%),
+        var(--bg);
+      background-size: cover;
+      background-position: center;
+      filter: saturate(1.1) contrast(1.05);
+      transform: scale(1.03);
+    }
+    .bg::after{
+      content:"";
+      position:absolute; inset:-20%;
+      background:
+        repeating-linear-gradient(
+          0deg,
+          rgba(255,255,255,0.03),
+          rgba(255,255,255,0.03) 1px,
+          transparent 1px,
+          transparent 6px
+        );
+      mix-blend-mode: overlay;
+      opacity: 0.22;
+      pointer-events:none;
+      transform: rotate(-2deg);
+    }
+    .grain{
+      position:fixed; inset:-30%;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+      opacity:0.06;
+      mix-blend-mode: overlay;
+      pointer-events:none;
+      animation: drift 10s linear infinite;
+    }
+    @keyframes drift{
+      0%{ transform: translate3d(-2%, -1%, 0); }
+      100%{ transform: translate3d(2%, 1%, 0); }
+    }
+
+    .wrap{
+      position:relative;
+      width:100vw; height:100vh;
+      display:grid;
+      place-items:center;
+      padding: min(6vh, 48px) 24px;
+    }
+
+
+    .stack{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 12px;
+    }
+    .nowPlaying{
+      position: absolute;
+      z-index: 25;            /* above shell if you want it visible; below if you want it “printed on TV” */
+      pointer-events: none;
+      user-select: none;
+
+      /* default styling (you’ll customize per skin later) */
+      font-size: 30px;
+      letter-spacing: 0.02em;
+      opacity: 0.92;
+      text-shadow: 0 10px 24px rgba(0,0,0,0.45);
+      color: white;
+    }
+
+    /* TV skin container */
+    .tvWrap{
+      width: var(--tvW);
+      aspect-ratio: 3000 / 1980;
+      position: relative;
+      /* IMPORTANT: remove wrapper shadow/radius (it creates a visible rounded rectangle “frame”).
+         If you want a shadow later, bake it into the PNG or add a dedicated tv*_shadow.png layer. */
+      border-radius: 0;
+      box-shadow: none;
+      overflow: visible;
+    }
+    .tvSkin{
+      position: relative;
+      width: 100%;
+      height: 100%;
+      
+    }
+
+    /* Screen window is where the video goes */
+    .screenWindow{
+      position: absolute;
+      overflow: hidden;
+      background: #000;
+      isolation: isolate;
+      z-index: 1;
+    }
+
+    /* CRT overlays on the screenWindow */
+    .screenWindow::before{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        repeating-linear-gradient(0deg,
+          rgba(255,255,255,0.03),
+          rgba(255,255,255,0.03) 1px,
+          rgba(0,0,0,0.00) 2px,
+          rgba(0,0,0,0.00) 4px
+        );
+      opacity:0.33;
+      mix-blend-mode: overlay;
+      pointer-events:none;
+      z-index: 6;
+    }
+    .screenWindow::after{
+      content:"";
+      position:absolute; inset:0;
+      background: radial-gradient(120% 95% at 50% 50%, transparent 35%, rgba(0,0,0,0.55) 88%);
+      pointer-events:none;
+      opacity:0.85;
+      z-index: 6;
+    }
+
+    /* YouTube embed: sealed + forced to fill screen window */
+    #dm-player{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      z-index: 1 !important;
+      overflow:hidden;
+      background:#000;
+      /* We still disable pointer events so the TV skin is the only “controller” */
+      pointer-events:none;
+    }
+    #dm-player iframe{
+      position:absolute !important;
+      inset:0 !important;
+      width:100% !important;
+      height:100% !important;
+      z-index: 1 !important;
+      border:0 !important;
+      display:block !important;
+    }
+
+
+    /* Pause cover (YouTube thumbnail + VHS glitch) */
+    :root{ --pauseFadeMs: 520ms; } /* make fade longer/shorter */
+    #pauseCover{
+      position:absolute;
+      inset:0;
+      z-index: 7; /* above video, below screenOff/staticFx */
+      opacity: 0;
+      pointer-events:none;
+      transition: opacity var(--pauseFadeMs) ease;
+      overflow:hidden;
+      background:#000;
+      cursor: pointer;
+      will-change: opacity;
+    }
+    #pauseCover.on{
+      opacity: 1;
+      pointer-events:auto;
+    }
+    #pauseCover.preview{
+      opacity: 1;
+      pointer-events:none; /* hover-preview: don't intercept clicks */
+    }
+
+    #pauseCover .img{
+      position:absolute;
+      inset:0;
+      background-size: cover;
+      background-position: center;
+      filter: contrast(1.08) saturate(1.1);
+      transform: scale(1.01);
+    }
+
+    /* RGB split “ghost” layers */
+    #pauseCover .img::before,
+    #pauseCover .img::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: inherit;
+      background-size: inherit;
+      background-position: inherit;
+      opacity: 0.32;
+      mix-blend-mode: screen;
+      pointer-events:none;
+    }
+    #pauseCover .img::before{
+      filter: hue-rotate(20deg);
+      transform: translateX(-2px);
+      animation: rgbJitter 1.1s steps(2,end) infinite;
+    }
+    #pauseCover .img::after{
+      filter: hue-rotate(-20deg);
+      transform: translateX(2px);
+      animation: rgbJitter 0.9s steps(2,end) infinite reverse;
+    }
+
+    /* Scanlines + slight roll */
+    #pauseCover::before{
+      content:"";
+      position:absolute;
+      inset:-30% -10%;
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          rgba(255,255,255,0.10) 0px,
+          rgba(255,255,255,0.10) 1px,
+          rgba(0,0,0,0) 3px,
+          rgba(0,0,0,0) 7px
+        );
+      opacity: 0.18;
+      pointer-events:none;
+      animation: roll 2.6s linear infinite;
+    }
+
+    /* Noise + vignette */
+    #pauseCover::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(closest-side, rgba(0,0,0,0) 55%, rgba(0,0,0,0.40) 100%),
+        repeating-radial-gradient(circle at 40% 30%, rgba(255,255,255,0.05) 0 1px, rgba(0,0,0,0) 1px 3px);
+      opacity: 0.16;
+      mix-blend-mode: overlay;
+      pointer-events:none;
+      animation: noise 0.7s steps(2,end) infinite;
+    }
+
+    @keyframes roll{
+      0%   { transform: translateY(-12%); }
+      100% { transform: translateY(12%); }
+    }
+    @keyframes noise{
+      0%   { transform: translate(0,0); }
+      25%  { transform: translate(-1.5%,1%); }
+      50%  { transform: translate(1%,-1.5%); }
+      75%  { transform: translate(1.5%,1.5%); }
+      100% { transform: translate(0,0); }
+    }
+    @keyframes rgbJitter{
+      0%,100% { clip-path: inset(0 0 0 0); transform: translateX(-2px); }
+      50%     { clip-path: inset(12% 0 35% 0); transform: translateX(-5px); }
+    }
+
+
+    /* Screen OFF overlay */
+    .screenOff{
+      position:absolute; inset:0;
+      z-index: 8;
+      opacity: 0;
+      pointer-events:none;
+      transition: opacity .18s ease;
+      background:
+        radial-gradient(120% 80% at 50% 55%, rgba(255,255,255,0.03), transparent 50%),
+        radial-gradient(90% 70% at 50% 50%, rgba(0,240,255,0.035), transparent 58%),
+        linear-gradient(180deg, rgba(0,0,0,0.92), rgba(0,0,0,0.98));
+    }
+    .screenOff.on{ opacity: 1; }
+
+    .staticFx{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(120% 90% at 50% 50%, rgba(255,255,255,0.08), transparent 50%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.20), rgba(255,255,255,0.20) 1px, rgba(0,0,0,0.00) 2px, rgba(0,0,0,0.00) 4px);
+      opacity:0;
+      pointer-events:none;
+      mix-blend-mode: screen;
+      z-index: 9;
+      transition: opacity .12s ease;
+    }
+    .staticFx.on{ opacity: 0.62; }
+
+    /* TV artwork on top */
+    .tvShell{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      object-fit: contain;
+      pointer-events:none;
+      z-index: 10;
+    }
+
+    /* Image-based interactive overlays */
+    .tvOverlay{
+      position:absolute;
+      z-index: 20;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      /* Remove default button styling (the “white rectangles” you see). */
+      background-color: transparent !important;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      box-shadow: none;
+      outline: none;
+      border-radius: 0;
+      -webkit-appearance: none;
+      appearance: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+
+    .tvOverlay:disabled{
+      pointer-events:none;
+      opacity: 0.65;
+      filter: grayscale(0.12) brightness(0.95);
+      cursor: wait;
+    }
+
+    .tvOverlay:focus,
+    .tvOverlay:focus-visible{
+      outline: none;
+      box-shadow: none;
+    }
+
+    /* hover buttons (play/restart/next) */
+    .gbtn{
+      background-image: var(--img);
+      background-color: transparent !important;
+      cursor: pointer;
+    }
+    .gbtn:hover{ background-image: var(--imgH); }
+
+    /* power (on/off) */
+    .pwr{ cursor: pointer; }
+
+    /* dial graphic can rotate */
+    .dial{
+      transform: rotate(var(--rot, 0deg));
+      transform-origin: 50% 50%;
+      cursor: grab;
+      touch-action: none;
+    }
+    .dial:active{ cursor: grabbing; }
+
+    /* Bottom bar (minimal) */
+    .bottom-bar{
+      position:fixed;
+      left: 0; right: 0; bottom: 0;
+      padding: 10px 14px 14px;
+      display:flex;
+      justify-content:center;
+      gap: 10px;
+      z-index: 50;
+    }
+    .mini{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.22);
+      color: var(--ui);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      cursor:pointer;
+      user-select:none;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    }
+    .mini:hover{ background: rgba(0,0,0,0.30); }
+    .mini:active{ transform: translateY(1px); }
+
+    @media (max-width: 760px){
+      :root{ --tvW: 96vw; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="bg" id="bg"></div>
+  <div class="grain"></div>
+
+  <div class="wrap">
+    <div class="stack">
+      <div class="tvWrap">
+      <div class="tvSkin" id="tvSkin">
+        <div class="screenWindow" id="screenWindow">
+          <div id="dm-player"></div>
+          <!-- Pause cover (YouTube thumbnail + VHS glitch) -->
+          <div id="pauseCover" title="Click to resume">
+            <div class="img" id="pauseImg"></div>
+          </div>
+          <div class="screenOff on" id="screenOff"></div>
+          <div class="staticFx" id="staticFx"></div>
+        </div>
+
+        <img class="tvShell" id="tvShell" alt="TV" />
+
+        <div class="tvOverlay dial" id="volDial"></div>
+
+        <button class="tvOverlay gbtn" id="btnPlay" type="button" aria-label="Play/Pause"></button>
+        <button class="tvOverlay gbtn" id="btnRestart" type="button" aria-label="Restart"></button>
+        <button class="tvOverlay gbtn" id="btnNext" type="button" aria-label="Next"></button>
+
+        <button class="tvOverlay pwr" id="btnPower" type="button" aria-label="Power"></button>
+        <div class="nowPlaying" id="nowPlaying">—</div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <button class="mini" id="bgBtn" title="Change background">🖼️ Background</button>
+    <button class="mini" id="skinBtn" title="Change TV skin">📺 TV Skin</button>
+    <button class="mini" id="fsBtn" title="Fullscreen">⛶ Fullscreen</button>
+  </div>
+<script>
+    /*****************************************************************
+     * CONFIG
+     *****************************************************************/
+    const BACKGROUNDS = [
+      "assets/bg/scene-01.gif",
+    ];
+
+    const VIDEO_LIST = [
+      // Optional manual labels:
+      // - If "label" is provided, we show it under the TV.
+      // - If "label" is omitted, we fall back to Dailymotion's videoTitle.
+  { id: "LOZuxwVk7TU", label: "Britney Spears — Toxic" }, // Britney Spears - Toxic - xgrt5
+  { id: "CduA0TULnow", label: "Britney Spears — Oops!... I Did It Again" }, // Britney Spears - Oops!... I Did It Again - x6hhc8
+  { id: "4Rg3sAb8Id8", label: "Christina Aguilera — Dirrty" }, // Christina Aguilera - Dirrty - xt7icc
+  { id: "cjIvu7e6Wq8", label: "Missy Elliott — Work It" }, // Missy Elliott - Work It - x2zxfne
+  { id: "FrLequ6dUdM", label: "TLC — No Scrubs" }, // TLC - No Scrubs
+  { id: "f5qICl3Fr3w", label: "Gwen Stefani — What You Waiting For?" }, // Gwen Stefani - What You Waiting For?
+  { id: "6M6samPEMpM", label: "Backstreet Boys — Everybody (Backstreet's Back)" }, // Backstreet Boys - Everybody (Backstreet's Back) - x3kqagd
+  { id: "4fndeDfaWCg", label: "Backstreet Boys — I Want It That Way" }, // Backstreet Boys - I Want It That Way - x8pur1
+  { id: "Eo-KmOd3i7s", label: "*NSYNC — Bye Bye Bye" }, // *NSYNC - Bye Bye Bye - xx4ip
+  { id: "TR3Vdo5etCQ", label: "No Doubt — Don't Speak" }, // No Doubt - Don't Speak - x2uhc5g
+  { id: "yqyIaNWP0T0", label: "Paula Abdul — Rush Rush" }, // Paula Abdul - Rush Rush
+  { id: "o7aShcmEksw", label: "Paula Abdul — Cold Hearted" }, // Paula Abdul - Cold Hearted 
+  { id: "El1kgCqD7Xk", label: "Paula Abdul — Straight Up" }, // Paula Abdul - Straight Up
+  { id: "1lyu1KKwC74", label: "The Verve — Bitter Sweet Symphony" }, // The Verve - Bitter Sweet Symphony - x2znms0
+  { id: "YVkUvmDQ3HY", label: "Eminem — Without Me" }, // Eminem - Without Me - xqn0p2
+  { id: "wmin5WkOuPw", label: "The Prodigy — Firestarter" }, // The Prodigy - Firestarter - x41ye3, x12la8, x22m47
+  { id: "IJWlBfo5Oj0", label: "Moby — Porcelain" }, // Moby - Porcelain - x17dkn
+  { id: "5wrwcEZ3Btw", label: "Moby — In This World" }, // Moby - Moby — In This World
+  { id: "cH_rfGBwamc", label: "Hole — Violet" }, // Hole - Violet
+  { id: "hTGJfRPLe08", label: "Jamie xx - Gosh" }, // Jamie xx - Gosh
+  { id: "3mbBbFH9fAg", label: "Soundgarden — Black Hole Sun" }, // Soundgarden - Black Hole Sun - x26i6l
+  { id: "PJ7E40Ec5ec", label: "Liquido — Narcotic" }, // Liquido - Narcotic
+  { id: "YlUKcNNmywk", label: "Red Hot Chili Peppers — Californication" }, // Red Hot Chili Peppers - Californication - xgz8q5
+  { id: "vabnZ9-ex7o", label: "Nirvana — Come As You Are" }, // Nirvana - Come As You Are - x4y43q
+  { id: "qfNmyxV2Ncw", label: "Aerosmith — Cryin'" }, // Aerosmith - Cryin - x1p5ny
+  { id: "NMNgbISmF4I", label: "Aerosmith — Crazy" }, // Aerosmith - Crazy - x2lluf9
+  { id: "zSmOvYzSeaQ", label: "Aerosmith — Amazing" }, // Aerosmith - Amazing
+  { id: "z5rRZdiu1UE", label: "Beastie Boys — Sabotage" }, // Beastie Boys - Sabotage - xqkcj
+  { id: "WdgLMslbDuY", label: "Beastie Boys — Make Some Noise" }, // Beastie Boys - Make Some Noise
+  { id: "uvRBUw_Ls2o", label: "Beastie Boys —  Body Movin" }, // Beastie Boys -  Body Movin'
+  { id: "fHiGbolFFGw", label: "Radiohead — Paranoid Android" }, // Radiohead - Paranoid Android - x1sq8z
+  { id: "SSbBvKaM6sk", label: "Blur — Song 2" }, // Blur - Song 2 - x9q219
+  { id: "CDsFKOrLWhU", label: "Sam Fender - Hypersonic Missiles" }, // Sam Fender - Hypersonic Missiles
+  { id: "8AHCfZTRGiI", label: "Johnny Cash — Hurt" }, // Johnny Cash - Hurt - x87on
+  { id: "1Osyw6Svv8U", label: "Johnny Cash — Ring of Fire" }, // Johnny Cash - Ring Of Fire
+  { id: "NOG3eus4ZSo", label: "The Smashing Pumpkins — Tonight, Tonight" }, // The Smashing Pumpkins - Tonight Tonight - x6x0fah
+  { id: "dTAAsCNK7RA", label: "OK Go — Here It Goes Again" }, // OK Go - Here It Goes Again - x28pwnu
+  { id: "djV11Xbc914", label: "a-ha — Take On Me" }, // a-ha - Take On Me - xiuosi
+  { id: "s__rX_WL100", label: "Madonna — Like a Virgin" }, // Madonna - Like A Virgin - x3ovfad
+  { id: "GuJQSAiODqI", label: "Madonna — Vogue" }, // Madonna - Vogue - x2586n
+  { id: "diYAc7gB-0A", label: "George Michael — Freedom! '90" }, // George Michael - Freedom! '90 - x2jyaqr
+  { id: "m_9hfHvQSNo", label: "George Michael — Father Figure" }, // George Michael - Father Figure
+  { id: "4JkIs37a2JE", label: "Jamiroquai — Virtual Insanity" }, // Jamiroquai - Virtual Insanity - x4nl02
+  { id: "BPNTC7uZYrI", label: "Coldplay — Up&Up" }, // Coldplay - Up&Up
+  { id: "FGBhQbmPwH8", label: "Daft Punk — One More Time" }, // Daft Punk - One More Time - x142d9
+  { id: "FQlAEiCb8m0", label: "Stardust — Music Sounds Better With You" }, // Stardust - Music Sounds Better With You
+  { id: "K0HSD_i2DvA", label: "Daft Punk — Around the World" }, // Daft Punk - Around the World - x2ar1a
+  { id: "fTH71AAxXmM", label: "The White Stripes — Fell in Love with a Girl" }, // The White Stripes - Fell in Love with a Girl - x3yjgv
+  { id: "0J2QdDbelmY", label: "The White Stripes — Seven Nation Army" }, // The White Stripes - Seven Nation Army - x24dte
+  { id: "htobTBlCvUU", label: "Björk — It's Oh So Quiet" }, // Björk - It's Oh So Quiet - x2lncrd
+  { id: "hTWKbfoikeg", label: "Nirvana — Smells Like Teen Spirit" }, // Nirvana - Smells Like Teen Spirit - x1aa0dz, xwedv
+  { id: "FqIACCH20JU", label: "Duran Duran — Ordinary World" }, // Duran Duran - Ordinary World
+  { id: "scif2vfg1ug", label: "The Cure — In Between Days" }, // The Cure - In Between Days
+  { id: "ub747pprmJ8", label: "Fatboy Slim — Right Here, Right Now" }, // Fatboy Slim - Right Here, Right Now
+  { id: "un3NkWnHl9Q", label: "Busta Rhymes — Gimme Some More" }, // Busta Rhymes - Gimme Some Mo'
+  { id: "xMVTKOoy1uk", label: "The Prodigy — Omen" }, // The Prodigy - Omen
+  { id: "Kd6XZGZsNyk", label: "50 Cent — In Da Club (MTV Version)" }, // 50 Cent - In Da Club (MTV Version) - x1s021
+  { id: "SRcnnId15BA", label: "50 Cent — Candy Shop" }, // 50 Cent - Candy Shop
+  { id: "wp43OdtAAkM", label: "Kate Bush — Running Up That Hill" }, // Kate Bush - Running Up That Hill
+  { id: "Fk-4lXLM34g", label: "Kate Bush — Wuthering Heights" }, // Kate Bush - Wuthering Heights
+  { id: "6xckBwPdo1c", label: "Kate Bush — Babooshka" }, // Kate Bush - Babooshka
+  { id: "Y1D3a5eDJIs", label: "Tom Petty and the Heartbreakers — Runnin' Down a Dream" }, // Tom Petty And The Heartbreakers - Runnin' Down A Dream
+  { id: "h0JvF9vpqx8", label: "Tom Petty and the Heartbreakers — Don't Come Around Here No More" }, // Tom Petty And The Heartbreakers - Don't Come Around Here No More 
+  { id: "aowSGxim_O8", label: "Tom Petty and the Heartbreakers — Mary Jane's Last Dance" }, // Tom Petty And The Heartbreakers - Mary Jane's Last Dance
+  { id: "Q4VK9_CfOLQ", label: "Britney Spears — Crazy" }, // Britney Spears - Crazy
+  { id: "tpKCqp9CALQ", label: "The Chemical Brothers — Hey Boy, Hey Girl" }, // The Chemical Brothers - Hey Boy, Hey Girl - xz6e5
+  { id: "0S43IwBF0uM", label: "The Chemical Brothers — Star Guitar" }, // The Chemical Brothers - Star Guitar [HD]
+  { id: "rSYwtllbweY", label: "The Chemical Brothers — Got To Keep On" }, // The Chemical Brothers - Got To Keep On
+  { id: "Xu3FTEmN-eg", label: "The Chemical Brothers — Galvanize" }, // The Chemical Brothers - Galvanize
+  { id: "dDj7DuHVV9E", label: "The Chemical Brothers — The Salmon Dance" }, // The Chemical Brothers - The Salmon Dance
+  { id: "SAxPLSvvbXY", label: "The Offspring — She's Got Issues" }, // The Offspring - She's Got Issues
+  { id: "7iNbnineUCI", label: "The Offspring — The Kids Aren't Alright" }, // The offspring - the kids arent alright
+  { id: "rdw-e9UXW50", label: "Garbage — Stupid Girl" }, // Garbage - Stupid Girl
+  { id: "JBrz-5ai1mo", label: "Garbage — The World Is Not Enough" }, // Garbage - The World Is Not Enough
+  { id: "3ppiohVRZ0s", label: "Garbage — Queer" }, // Garbage - Queer
+  { id: "HcX1GpMR9n4", label: "Garbage — Push it" }, // Garbage - Push it
+  { id: "Cy1LdAaGASw", label: "Garbage — Cherry Lips" }, // Garbage - Cherry Lips
+  { id: "ypr18UmxOas", label: "Garbage — I Think I'm Paranoid" }, // Garbage - I Think I'm Paranoid
+  { id: "Vi76bxT7K6U", label: "Massive Attack — Karmacoma" }, // Karmacoma - Massive Attack
+  { id: "p5NX1FC-7-w", label: "The Chemical Brothers — Setting Sun" }, // Chemical Brothers - Setting Sun
+  { id: "wpqm-05R2Jk", label: "The Avalanches — Since I Left You" }, // Avalanches-Since I left you
+  { id: "qrO4YZeyl0I", label: "Lady Gaga — Bad Romance" }, // Lady Gaga - Bad Romance
+  { id: "UBS4Gi1y_nc", label: "Aphex Twin — Windowlicker" }, // Aphex Twin - Windowlicker (1997)
+  { id: "TZ827lkktYs", label: "Aphex Twin — Come to Daddy" }, // Aphex Twin - Come To Daddy - xu4a0
+  { id: "_mej5wS7viw", label: "The Prodigy — Poison" }, // The Prodigy - Poison
+  { id: "a4JhtoR39M0", label: "Placebo — Pure Morning" }, // Placebo - Pure morning
+  { id: "04_i9pWyUuM", label: "Placebo — Loud Like Love" }, // Placebo- Loud Like Love
+  { id: "NazVKnD-_sQ", label: "Cassius — I <3 U So" }, // Cassius - I love you so
+  { id: "Z8Y1MalRrDc", label: "Cinnamon Chasers — Luv Deluxe" }, // Cinnamon Chasers - Luv Deluxe
+  { id: "xat1GVnl8-k", label: "Bloodhound Gang — The Bad Touch" }, // Bloodhound Gang - The Bad Touch
+  { id: "Adgx9wt63NY", label: "Bloodhound Gang — Fire Water Burn" }, // Bloodhound Gang - Fire Water Burn
+  { id: "sOnqjkJTMaA", label: "Michael Jackson — Thriller" }, // Michael Jackson - Thriller
+  { id: "eFTLKWw542g", label: "Billy Joel - We Didn't Start The Fire" }, // Billy Joel - We Didn't Start The Fire
+  { id: "W8r-tXRLazs", label: "The Buggles — Video Killed the Radio Star" }, // The Buggles - Video Killed the Radio Star
+  { id: "k8vaoGQCuyg", label: "The Buggles — Living In The Plastic Age" }, // The Buggles - Living In The Plastic Age 
+  { id: "Zi_XLOBDo_Y", label: "Michael Jackson — Billie Jean" }, // Michael Jackson - Billie Jean - x1vhwiw
+  { id: "79fzeNUqQbQ", label: "Madonna — Like a Prayer" }, // Madonna - Like a Prayer - xn4ptw
+  { id: "OJWJE0x7T4Q", label: "Peter Gabriel — Sledgehammer" }, // Peter Gabriel - Sledgehammer - x9ftmfc
+  { id: "_OO2PuGz-H8", label: "Peter Gabriel — Solsbury Hill" }, // Peter Gabriel - Solsbury Hill
+  { id: "wTP2RUD_cL0", label: "Dire Straits — Money for Nothing" }, // Dire Straits - Money for Nothing - xdpsvz
+  { id: "jhdFe3evXpk", label: "Dire Straits — Brothers In Arms " }, // Dire Straits - Brothers In Arms 
+  { id: "nTizYn3-QN0", label: "Duran Duran — Rio" }, // Duran Duran - Rio - x1xwhxe
+  { id: "6p-lDYPR2P8", label: "Madonna — Material Girl" }, // Madonna - Material Girl - x11dir
+  { id: "qeMFqkcPYcg", label: "Eurythmics — Sweet Dreams (Are Made of This)" }, // Eurythmics - Sweet Dreams (Are Made of This) - x6kbk6d
+  { id: "PIb6AZdTr-A", label: "Cyndi Lauper — Girls Just Want to Have Fun" }, // Cyndi Lauper - Girls Just Want to Have Fun - x8h04qv
+  { id: "f4Mc-NYPHaQ", label: "Queen — I Want to Break Free" }, // Queen - I Want to Break Free
+  { id: "ymNFyxvIdaM", label: "Bomfunk MC's — Freestyler" }, // Boomfunk Mc's - Freestyler
+  { id: "OMOGaugKpzs", label: "The Police — Every Breath You Take" }, // The Police - Every Breath You Take
+  { id: "aGCdLKXNF3w", label: "Tears for Fears — Everybody Wants to Rule the World" }, // Tears for Fears - Everybody Wants to Rule the World - x24q9o
+  { id: "n3nPiBai66M", label: "The Cure — Just Like Heaven" }, // The Cure - Just Like Heaven - xb5kj8
+  { id: "6Cs3Pvmmv0E", label: "George Michael — Faith" }, // George Michael - Faith - x33uu9
+  { id: "bG5N3GC-m20", label: "George Michael — One More Try" }, // George Michael - One More Try
+  { id: "ZG_k5CSYKhg", label: "Faith No More — Epic" }, // Faith No More - Epic
+  { id: "mfI1S0PKJR8", label: "New Order — True Faith" }, // NEW ORDER 【True Faith】
+  { id: "7uIFISklvXY", label: "Texas — Summer Son" }, // Texas - Summer Son
+  { id: "xwtdhWltSIg", label: "R.E.M. — Losing My Religion" }, // R.E.M. - Losing My Religion - xpt5oz
+  { id: "5rOiW_xY-kc", label: "R.E.M. — Everybody Hurts" }, // R.E.M. - Everybody Hurts
+  { id: "j7oQEPfe-O8", label: "R.E.M. — The One I Love" }, // R.E.M. - The One I Love
+  { id: "1uYWYWPc9HU", label: "Radiohead — Karma Police" }, // Radiohead - Karma Police
+  { id: "n5h0qHwNrHk", label: "Radiohead — Fake Plastic Trees" }, // Radiohead - Fake Plastic Trees
+  { id: "8WEtxJ4-sh4", label: "TLC — Waterfalls" }, // TLC - Waterfalls
+  { id: "gJLIiF15wjQ", label: "Spice Girls — Wannabe" }, // Spice Girls - Wannabe - x30puqk
+  { id: "8SbUC-UaAxE", label: "Guns N' Roses — November Rain" }, // Guns N' Roses - November Rain - xce4wo
+  { id: "C-u5WLJ9Yk4", label: "Britney Spears — ...Baby One More Time" }, // Britney Spears - Baby One More Time - x475fl
+  { id: "sNPnbI1arSE", label: "Eminem — My Name Is" }, // Eminem - My Name Is
+  { id: "PWgvGjAhvIw", label: "OutKast — Hey Ya!" }, // OutKast - Hey Ya! - xhtnwv
+  { id: "4m1EFMoRFvY", label: "Beyoncé — Single Ladies (Put a Ring on It)" }, // Beyoncé - Single Ladies (Put a Ring on It)
+  { id: "2hsUXhlNbMs", label: "Lady Gaga — Telephone" }, // Lady Gaga - Telephone
+  { id: "xGaZBfJOyAc", label: "Lady Gaga — The Dead Dance" }, // Lady Gaga - The Dead Dance
+  { id: "oRdxUFDoQe0", label: "Michael Jackson — Beat It" }, // Michael Jackson - Beat It
+  { id: "UG3VcCAlUgE", label: "Prince — When Doves Cry" }, // Prince - When Doves Cry
+  { id: "H9tEvfIsDyo", label: "Prince — Kiss" }, // Prince - Kiss
+  { id: "oJL-lCzEXgI", label: "Duran Duran — Hungry Like the Wolf" }, // Duran Duran - Hungry Like the Wolf
+  { id: "Ye7FKc1JQe4", label: "Tears for Fears — Shout" }, // Tears for Fears - Shout
+  { id: "ijxk-fgcg7c", label: "The Cure — Lullaby" }, // The Cure - Lullaby
+  { id: "aGSKrC7dGcY", label: "Depeche Mode — Enjoy the Silence" }, // Depeche Mode - Enjoy the Silence
+  { id: "u1xrNaTO1bI", label: "Depeche Mode — Personal Jesus" }, // Depeche Mode - Personal Jesus
+  { id: "VdQY7BusJNU", label: "Cyndi Lauper — Time After Time" }, // Cyndi Lauper - Time After Time
+  { id: "LPn0KFlbqX8", label: "Cyndi Lauper — True Colors" }, // Cyndi Lauper - True Colors
+  { id: "eH3giaIzONA", label: "Whitney Houston — I Wanna Dance with Somebody" }, // Whitney Houston - I Wanna Dance with Somebody
+  { id: "vx2u5uUu3DE", label: "Bon Jovi — It's My Life" }, // Bon Jovi - It's My Life
+  { id: "1w7OgIMMRc4", label: "Guns N' Roses — Sweet Child O' Mine" }, // Guns N' Roses - Sweet Child O' Mine
+  { id: "u9WgtlgGAgs", label: "The Cardigans — My Favourite Game" }, // The Cardigans - My Favorite Game
+  { id: "aDaOgu2CQtI", label: "Pearl Jam — Do the Evolution" }, // Pearl Jam - Evolution
+  { id: "qORYO0atB6g", label: "Beastie Boys — Intergalactic" }, // Beastie Boys - Intergalactic
+  { id: "hi4pzKvuEQM", label: "Chet Faker — Gold" }, // Chet Faker - Gold
+  { id: "6vopR3ys8Kw", label: "Chet Faker — Drop the Game" }, // Chet Faker - Drop the Game
+  { id: "aP_-P_BS6KY", label: "Chet Faker — Talk Is Cheap" }, // Chet Faker - Talk Is Cheap
+  { id: "JNJv-Ebi67I", label: "Björk — Bachelorette" }, // Björk - BEACHELORETTE
+  { id: "CD-E-LDc384", label: "Metallica — Enter Sandman" }, // Metallica - Enter Sandman
+  { id: "tAGnKpE4NCI", label: "Metallica — Nothing Else Matters" }, // Metallica - Nothing Else Matters
+  { id: "WM8bTdBs-cw", label: "Metallica — One" }, // Metallica. ONE
+  { id: "boanuwUMNNQ", label: "Metallica — Whiskey in the Jar" }, // Metallica Whiskey in the Jar 
+  { id: "GLvohMXgcBo", label: "Red Hot Chili Peppers — Under the Bridge" }, // Red Hot Chili Peppers - Under the Bridge
+  { id: "Jne9t8sHpUc", label: "Alanis Morissette — Ironic" }, // Alanis Morissette - Ironic
+  { id: "6hzrDeceEKc", label: "Oasis — Wonderwall" }, // Oasis - Wonderwall
+  { id: "4aeETEoNfOg", label: "The Smashing Pumpkins — 1979" }, // Smashing Pumpkins - 1979
+  { id: "0qc1ELfB6AY", label: "The Prodigy — Smack My Bitch Up" }, // The Prodigy - Smack My Bitch Up
+  { id: "a4eav7dFvc8", label: "The Prodigy — Out of Space" }, // The Prodigy - Out Of Space
+  { id: "6_PAHbqq-o4", label: "The Prodigy — Breathe" }, // The Prodigy - Breathe
+  { id: "svJvT6ruolA", label: "The Prodigy — No Good" }, // The Prodigy - No Good
+  { id: "Th-AqMvvBzE", label: "The Smashing Pumpkins — Rocket" }, // Smashing pumpkins-Rocket
+  { id: "wCDIYvFmgW8", label: "Fatboy Slim — Weapon of Choice" }, // Fatboy Slim - Weapon of Choice
+  { id: "ruAi4VBoBSM", label: "Fatboy Slim — Praise You" }, // Fatboy Slim - Praise You
+  { id: "JEq10L7u3SM", label: "Fatboy Slim — Ya Mama (Push The Tempo)" }, // Fatboy Slim - Ya Mama (Push The Tempo)
+  { id: "tmw94O9OWRE", label: "Fatboy Slim — Going Out of My Head" }, // Fatboy Slim - Going Out of my Head
+  { id: "jPeheoBa2_Y", label: "Björk — Army of Me" }, // Björk - Army of Me
+  { id: "YgSPaXgAdzE", label: "Beck — Loser" }, // Beck - Loser
+  { id: "qkNa5xzOe5U", label: "Beck — Lost Cause" }, // Beck - Lost Cause
+  { id: "iTxOKsyZ0Lw", label: "The Chemical Brothers — Block Rockin' Beats" }, // The Chemical Brothers - Block Rockin' Beats
+  { id: "u7K72X4eo_s", label: "Massive Attack — Teardrop" }, // Massive Attack - Teardrop
+  { id: "un8EW82GwKc", label: "Portishead — Sour Times" }, // Portishead - Sour Times
+  { id: "TmDkzVvherk", label: "Portishead — Only You" }, // Portishead: Only You
+  { id: "K4dx42YzQCE", label: "The White Stripes — The Hardest Button to Button" }, // The White Stripes - The Hardest Button To Button
+  { id: "etSbOs3aUqI", label: "Gary Jules — Mad World" }, // Gary Jules - Mad World
+  { id: "eJO5HU_7_1w", label: "Eminem — The Real Slim Shady" }, // Eminem - The Real Slim Shady
+  { id: "8GliyDgAGQI", label: "Dr. Dre — Nuthin' but a 'G' Thang" }, // Dr. Dre - Nuthin' but a 'G' Thang
+  { id: "glEiPXAYE-U", label: "The Notorious B.I.G. — Hypnotize" }, // The Notorious B.I.G. - Hypnotize
+  { id: "fWCZse1iwE0", label: "Snoop Dogg — Gin and Juice" }, // Snoop Dogg - Gin and Juice
+  { id: "hHcyJPTTn9w", label: "Missy Elliott — The Rain (Supa Dupa Fly)" }, // Missy Elliott - The Rain (Supa Dupa Fly)
+  { id: "sQgd6MccwZc", label: "Destiny's Child — Say My Name" }, // Destiny's Child - Say My Name
+  { id: "kIDWgqDBNXA", label: "Christina Aguilera — Genie in a Bottle" }, // Christina Aguilera - Genie in a Bottle
+  { id: "hpspGHeLOPE", label: "Christina Aguilera — What a Girl Wants" }, // Christina Aguilera - What A Girl Wants
+  { id: "lYfkl-HXfuU", label: "Jennifer Lopez — If You Had My Love" }, // Jennifer Lopez - If You Had My Love
+  { id: "weRHyjj34ZE", label: "Shakira — Whenever, Wherever" }, // Shakira - Whenever, Wherever
+  { id: "c18441Eh_WE", label: "Kylie Minogue — Can't Get You Out of My Head" }, // Kylie Minogue - Can't Get You Out of My Head
+  { id: "Sdz2oW0NMFk", label: "Madonna — Music" }, // Madonna - Music
+  { id: "15kWlTrpt5k", label: "Madonna — Rain" }, // Madonna - Rain
+  { id: "VlbaJA7aO9M", label: "Madonna - Die Another Day" }, // Madonna - Die Another Day
+  { id: "CSaFgAwnRSc", label: "Madonna - Bedtime Story" }, // Madonna - Bedtime Story
+  { id: "BnO3nijfYmU", label: "Robbie Williams — Rock DJ" }, // Robbie Williams - Rock DJ
+  { id: "4D35vfQ7eZg", label: "RRobbie Williams - Come undone" }, // Robbie Williams - Come undone
+  { id: "MYxAiK6VnXw", label: "OutKast — Ms. Jackson" }, // OutKast - Ms. Jackson
+  { id: "gWju37TZfo0", label: "OutKast — Roses" }, // OutKast - Roses
+  { id: "1V_xRb0x9aw", label: "Gorillaz — Clint Eastwood" }, // Gorillaz - Clint Eastwood
+  { id: "HyHNuVaZJ-k", label: "Gorillaz — Feel Good Inc." }, // Gorillaz - Feel Good Inc.
+  { id: "WXR-bCF5dbM", label: "Gorillaz — 19-2000" }, // Gorillaz - 19-2000
+  { id: "jRGrNDV2mKc", label: "Korn — Freak on a Leash" }, // Korn Freak on a leash
+  { id: "DksSPZTZES0", label: "Justin Timberlake — Cry Me a River" }, // Justin Timberlake – "Cry me A River"
+  { id: "yKNxeF4KMsY", label: "Coldplay — Yellow" }, // Coldplay - Yellow
+  { id: "RB-RcX5DS5A", label: "Coldplay — The Scientist" }, // Coldplay - The Scientist
+  { id: "k4V3Mo61fJM", label: "Coldplay — Fix You" }, // Coldplay - Fix you
+  { id: "QtXby3twMmI", label: "Coldplay — Adventure Of A Lifetime" }, // Coldplay - Adventure Of A Lifetime
+  { id: "eVTXPUF4Oz4", label: "Linkin Park — In the End" }, // Linkin Park - In the End
+  { id: "kXYiU_JCYtU", label: "Linkin Park — Numb" }, // Linkin Park - Numb
+  { id: "GsVcUzP_O_8", label: "Madonna — Express Yourself" }, // Madonna - Express Yourself
+  { id: "G333Is7VPOg", label: "Madonna — Papa Don't Preach" }, // Madonna - Papa Don't Preach
+  { id: "zpzdgmqIHOQ", label: "Madonna — La Isla Bonita" }, // Madonna - La Isla Bonita
+  { id: "XS088Opj9o0", label: "Madonna — Frozen" }, // Madonna - Frozen
+  { id: "dsUXAEzaC3Q", label: "Michael Jackson — Bad" }, // Michael Jackson - Bad
+  { id: "h_D3VFfhvs4", label: "Michael Jackson — Smooth Criminal" }, // Michael Jackson - Smooth Criminal
+  { id: "F2AitTPI5U0", label: "Michael Jackson — Black or White" }, // Michael Jackson - Black or White
+  { id: "LeiFF0gvqcc", label: "Michael Jackson — Remember the Time" }, // Michael Jackson - Remember the Time
+  { id: "XAi3VTSdTxU", label: "Michael Jackson — Earth Song" }, // Michael Jackson - Earth Song
+  { id: "OAwaNWGLM0c", label: "Janet Jackson — Rhythm Nation" }, // Janet Jackson - Rhythm Nation
+  { id: "BTSd4vqnMwo", label: "Janet Jackson — If" }, // Janet Jackson - If
+  { id: "0P4A1K4lXDo", label: "Michael Jackson, Janet Jackson - Scream" }, // Michael Jackson, Janet Jackson - Scream
+  { id: "7SXKHiPQPhk", label: "Janet Jackson — Together Again" }, // Janet Jackson - Together Again
+  { id: "rblt2EtFfC4", label: "Prince — 1999" }, // Prince - 1999
+  { id: "XfR9iY5y94s", label: "Men at Work — Down Under" }, // Men at work - Down Under
+  { id: "VbD_kBJc_gI", label: "David Bowie — Let's Dance" }, // David Bowie - Let's Dance
+  { id: "HyMm4rJemtI", label: "David Bowie — Ashes to Ashes" }, // David Bowie - Ashes to Ashes
+  { id: "iYYRH4apXDo", label: "David Bowie — Space Oddity" }, // David Bowie - Space Oddity
+  { id: "5IsSpAOD6K8", label: "Talking Heads — Once in a Lifetime" }, // Talking Heads - Once in a Lifetime
+  { id: "_3eC35LoF4U", label: "Talking Heads — Burning Down the House" }, // Talking Heads - Burning Down the House
+  { id: "3dOx510kyOs", label: "The Cars — You Might Think" }, // The Cars - You Might Think
+  { id: "xuZA6qiJVfU", label: "The Cars — Drive" }, // The Cars - Drive
+  { id: "mmi60Bd4jSs", label: "Daft Punk — Da Funk" }, // Daft Punk - Da Funk
+  { id: "gAjR4_CbPpQ", label: "Daft Punk — Harder, Better, Faster, Stronger" }, // Daft Punk - Harder, Better, Faster, Stronger
+  { id: "MkjUWE6Wv9Y", label: "Daft Punk — Lose Yourself to Dance" }, // Daft Punk - Lose Yourself to Dance
+  { id: "iIpfWORQWhU", label: "A Flock of Seagulls — I Ran (So Far Away)" }, // A Flock of Seagulls - I Ran (So Far Away)
+  { id: "9GMjH1nR0ds", label: "New Order — Blue Monday" }, // New Order - Blue Monday
+  { id: "tkOr12AQpnU", label: "New Order — Bizarre Love Triangle" }, // New Order - Bizarre Love Triangle
+  { id: "zuuObGsB0No", label: "Joy Division — Love Will Tear Us Apart" }, // Joy Division - Love Will Tear Us Apart
+  { id: "cJRP3LRcUFg", label: "The Smiths — This Charming Man" }, // The Smiths - This Charming Man
+  { id: "azfG5H-pCVg", label: "INXS — New Sensation" }, // INXS - New Sensation
+  { id: "5WybiA263bw", label: "U2 — The Sweetest Thing" }, // U2 - The Sweetest Thing
+  { id: "jbiFcPhccu8", label: "tUnE-yArDs - Water Fountain" }, // tUnE-yArDs: Water Fountain
+  { id: "CdqoNKCCt7A", label: "Simple Minds — Don't You (Forget About Me)" }, // Simple Minds - Don't You (Forget About Me)
+  { id: "a3ir9HC9vYg", label: "a-ha — The Sun Always Shines on T.V." }, // a-ha - The Sun Always Shines on T.V.
+  { id: "KCjMZMxNr-0", label: "Duran Duran — Girls on Film" }, // Duran Duran - Girls on Film
+  { id: "_6FBfAQ-NDE", label: "Depeche Mode — Just Can't Get Enough" }, // Depeche Mode - Just Can't Get Enough
+  { id: "M2VBmHOYpV8", label: "Depeche Mode — Policy of Truth" }, // Depeche Mode - Policy of Truth
+  { id: "dRHetRTOD1Q", label: "Pet Shop Boys — It's a Sin" }, // Pet Shop Boys - It's a Sin
+  { id: "DnvFOaBoieE", label: "Pet Shop Boys — Being Boring" }, // Pet Shop Boys - Being Boring
+  { id: "LNBjMRvOB5M", label: "Pet Shop Boys — Go West" }, // Pet Shop Boys - Go West
+  { id: "omfz62qu_Bc", label: "2Pac feat. Dr. Dre — California Love" }, // 2pac feat. Dr. Dre - California Love
+  { id: "izGwDsrQ1eQ", label: "George Michael — Careless Whisper" }, // George Michael - Careless Whisper
+  { id: "E8gmARGvPlI", label: "Wham! — Last Christmas" }, // Wham! - Last Christmas
+  { id: "m3-hY-hlhBg", label: "Whitney Houston — How Will I Know" }, // Whitney Houston - How Will I Know
+  { id: "mHONNcZbwDY", label: "Lionel Richie — Hello" }, // Lionel Richie - Hello
+  { id: "YkADj0TPrJA", label: "Phil Collins — In the Air Tonight" }, // Phil Collins - In the Air Tonight
+  { id: "r0qBaBb1Y-U", label: "Phil Collins — Sussudio" }, // Phil Collins - Sussudio
+  { id: "Yq7FKO5DlV0", label: "Genesis — Land of Confusion" }, // Genesis - Land of Confusion
+  { id: "azdwsXLmrHE", label: "Queen — Radio Ga Ga" }, // Queen - Radio Ga Ga
+  { id: "3PU4d5Iogd4", label: "Jamie T — Zombie" }, // Jamie T - Zombie
+  { id: "rXuvdeEC5y8", label: "Madness - Our House" }, // Madness - Our House
+  { id: "HMUDVMiITOU", label: "DJ Snake, Lil Jon - Turn Down for What" }, // DJ Snake, Lil Jon - Turn Down for What
+  { id: "B0AX81gv5aM", label: "Mindless Self Indulgence — Shut Me Up" }, // Mindless Self Indulgence - Shut Me Up
+  { id: "NUC2EQvdzmY", label: "DJ Shadow feat. Run the Jewels — Nobody Speak" }, // DJ Shadow feat. Run The Jewels - Nobody Speak
+  { id: "aENX1Sf3fgQ", label: "The Police — Every Little Thing She Does Is Magic" }, // The Police - Every Little Thing She Does Is Magic
+  { id: "KNIZofPB8ZM", label: "The Police — Don't Stand So Close to Me" }, // The Police - Don't Stand So Close to Me
+  { id: "bJ9r8LMU9bQ", label: "The Clash — Rock the Casbah" }, // The Clash - Rock the Casbah
+  { id: "zRIbf6JqkNc", label: "Guns N' Roses — Don't Cry" }, // Guns N' Roses - Don't Cry
+  { id: "v2AC41dglnM", label: "AC/DC — Thunderstruck" }, // AC/DC - Thunderstruck
+  { id: "6M4_Ommfvv0", label: "Van Halen — Hot for Teacher" }, // Van Halen - Hot for Teacher
+  { id: "btPJPFnesV4", label: "Survivor — Eye of the Tiger" }, // Survivor - Eye of the Tiger
+  { id: "lcOxhH8N3Bo", label: "Bonnie Tyler — Total Eclipse of the Heart" }, // Bonnie Tyler - Total Eclipse of the Heart
+  { id: "eUDcTLaWJuo", label: "ZZ Top — Legs" }, // ZZ Top - Legs
+  { id: "Ae829mFAGGE", label: "ZZ Top — Gimme All Your Lovin'" }, // ZZ Top - Gimme All Your Lovin'
+  { id: "1lWJXDG2i0A", label: "Tom Petty — Free Fallin'" }, // Tom Petty - Free Fallin'
+  { id: "wMsazR6Tnf8", label: "Joan Jett & the Blackhearts — I Love Rock 'n' Roll" }, // Joan Jett & the Blackhearts - I Love Rock 'n Roll
+  { id: "IGVZOLV9SPo", label: "Pat Benatar — Love Is a Battlefield" }, // Pat Benatar - Love Is a Battlefield
+  { id: "xCorJG9mubk", label: "Roxette — Joyride" }, // Roxette - Joyride
+  { id: "otgnuwR6w8o", label: "Bryan Adams - Do I Have To Say The Words?" }, // Bryan Adams - Do I Have To Say The Words?
+  { id: "9SOryJvTAGs", label: "The B-52's — Love Shack" }, // The B-52's - Love Shack
+  { id: "4B_UYYPb-Gk", label: "RUN-DMC — Walk This Way" }, // RUN-DMC - Walk This Way
+  { id: "mmo3HFa2vjg", label: "Public Enemy — Fight the Power" }, // Public Enemy - Fight the Power
+  { id: "vCadcBR95oU", label: "Salt-N-Pepa — Push It" }, // Salt-N-Pepa - Push It
+  { id: "IxGvm6btP1A", label: "Kanye West - Fade" }, // Kanye West - Fade
+  { id: "4vaN01VLYSQ", label: "Salt-N-Pepa — Shoop" }, // Salt-N-Pepa - Shoop
+  { id: "otCpCn0l4Wo", label: "MC Hammer — U Can't Touch This" }, // MC Hammer - U Can't Touch This
+  { id: "rog8ou-ZepE", label: "Vanilla Ice — Ice Ice Baby" }, // Vanilla Ice - Ice Ice Baby
+  { id: "X53ZSxkQ3Ho", label: "Sir Mix-a-Lot — Baby Got Back" }, // Sir Mix-a-Lot - Baby Got Back
+  { id: "HEXWRTEbj1I", label: "Haddaway — What Is Love" }, // Haddaway - What Is Love
+  { id: "wh-07BzfgYY", label: "Ace of Base — Beautiful Life" }, // Ace of Base - Beautiful Life
+  { id: "9EcjWd-O4jI", label: "Technotronic — Pump Up the Jam" }, // Technotronic - Pump Up the Jam
+  { id: "LaTGrV58wec", label: "C+C Music Factory — Gonna Make You Sweat (Everybody Dance Now)" }, // C+C Music Factory - Gonna Make You Sweat (Everybody Dance Now)
+  { id: "MXXRHpVed3M", label: "Vengaboys — We're Going to Ibiza!!" }, // Vengaboys - We're Going to Ibiza!
+  { id: "NLg0C86_hZs", label: "Eiffel 65 — Blue (Da Ba Dee)" }, // Eiffel 65 - Blue (Da Ba Dee)
+  { id: "nZXRV4MezEw", label: "Cher — Believe" }, // Cher - Believe
+  { id: "fe4EK4HSPkI", label: "MGMT - Kids" }, // MGMT - Kids
+  { id: "B9dSYgd5Elk", label: "MGMT - Time to Pretend" }, // MGMT - Time to Pretend
+  { id: "zWaymcVmJ-A", label: "Los del Río — Macarena" }, // Los del Río - Macarena
+  { id: "9ro0FW9Qt-4", label: "Spice Girls — Say You'll Be There" }, // Spice Girls - Say You'll Be There
+  { id: "9wfpXI5PKlw", label: "Spice Girls — Spice Up Your Life" }, // Spice Girls - Spice Up Your Life
+  { id: "FA5jsa1lR9c", label: "Spice Girls — 2 Become 1" }, // Spice Girls - 2 Become 1
+  { id: "MEb2CecR11I", label: "Backstreet Boys — Larger Than Life" }, // Backstreet Boys - Larger Than Life
+  { id: "GQMlWwIXg3M", label: "*NSYNC — It's Gonna Be Me" }, // *NSYNC - It's Gonna Be Me
+  { id: "Mzybwwf2HoQ", label: "Britney Spears — I'm a Slave 4 U" }, // Britney Spears - I'm a Slave 4 U
+  { id: "mW1dbiD_zDk", label: "P!nk — Get the Party Started" }, // P!nk - Get the Party Started
+  { id: "eBShN8qT4lk", label: "Beastie Boys — (You Gotta) Fight for Your Right (To Party!)" }, // (You Gotta) Fight For Your Right (To Party)  - Beastie Boys
+  { id: "5NPBIwQyPWE", label: "Avril Lavigne — Complicated" }, // Avril Lavigne - Complicated
+  { id: "Cwkej79U3ek", label: "Vanessa Carlton — A Thousand Miles" }, // Vanessa Carlton - A Thousand Miles
+  { id: "roPQ_M3yJTA", label: "Nelly Furtado — I'm Like a Bird" }, // Nelly Furtado - I'm Like a Bird
+  { id: "O0lf_fE3HwA", label: "Gwen Stefani — The Sweet Escape" }, // Gwen Stefani - The Sweet Escape
+  { id: "wqVsfGQ_1SU", label: "The Pharcyde — Drop" }, // The Pharcyde: Drop
+  { id: "PHzOOQfhPFg", label: "No Doubt — Just a Girl" }, // No Doubt - Just a Girl
+  { id: "wt1YkGO2Ieo", label: "No Doubt — Hey Baby" }, // No Doubt - Hey Baby
+  { id: "QtTj4cramPM", label: "No Doubt — Hella Good" }, // No Doubt - Hella Good
+  { id: "Wmc8bQoL-J0", label: "Destiny's Child — Survivor" }, // Destiny's Child - Survivor
+  { id: "ViwtNLUqkMY", label: "Beyoncé — Crazy in Love" }, // Beyoncé - Crazy in Love
+  { id: "K4r4lysSgLE", label: "Beyoncé — Haunted" }, // Beyoncé - Haunted
+  { id: "znlFu_lemsU", label: "Mary J. Blige — Family Affair" }, // Mary J. Blige - Family Affair
+  { id: "uTMuqL0qx08", label: "Aaliyah — Are You That Somebody?" }, // Aaliyah - Are You That Somebody?
+  { id: "qq09UkPRdFY", label: "Mariah Carey — Fantasy" }, // Mariah Carey - Fantasy
+  { id: "q7Nvqf36C3c", label: "Marilyn Manson — Tainted Love" }, // Marilyn Manson - Tainted Love
+  { id: "QQPJYnr48yU", label: "Marilyn Manson — Coma White" }, // Marilyn Manson - Coma White
+  { id: "qi5nTb-NRFU", label: "Marilyn Manson — The Nobodies" }, // Marilyn Manson - The Nobodies
+  { id: "i7iQbBbMAFE", label: "En Vogue — Free Your Mind" }, // En Vogue - Free Your Mind
+  { id: "qSIOp_K5GMw", label: "Brandy & Monica — The Boy Is Mine" }, // Brandy & Monica - The Boy Is Mine
+  { id: "p2Rch6WvPJE", label: "Toni Braxton — Un-Break My Heart" }, // Toni Braxton - Un-Break My Heart
+  { id: "hDd2G_V1rzc", label: "Seal — Kiss from a Rose" }, // Seal - Kiss from a Rose
+  { id: "to90047YXac", label: "Seal — Seal - Killer" }, // Seal - Killer
+  { id: "VV1XWJN3nJo", label: "Natalie Imbruglia — Torn" }, // Natalie Imbruglia - Torn
+  { id: "Nntd2fgMUYw", label: "Eagle-Eye Cherry — Save Tonight" }, // Eagle-Eye Cherry - Save Tonight
+  { id: "2H5uWRjFsGc", label: "Chumbawamba — Tubthumping" }, // Chumbawamba - Tubthumping
+  { id: "NI6aOFI7hms", label: "The Cardigans — Lovefool" }, // The Cardigans - Lovefool
+  { id: "fPO76Jlnz6c", label: "Coolio — Gangsta's Paradise" }, // Coolio - Gangsta's Paradise
+  { id: "y6Sxv-sUYtM", label: "Pharrell Williams - Happy" }, // Pharrell Williams - Happy 
+  { id: "0hiUuL5uTKc", label: "Montell Jordan — This Is How We Do It" }, // Montell Jordan - This Is How We Do It
+  { id: "3KL9mRus19o", label: "Blackstreet — No Diggity" }, // Blackstreet - No Diggity
+  { id: "oKOtzIo-uYw", label: "Fugees — Killing Me Softly" }, // Fugees - Killing Me Softly
+  { id: "aIXyKmElvv8", label: "Fugees — Ready or Not" }, // Fugees - Ready Or Not
+  { id: "T6QKqFPRZSA", label: "Lauryn Hill — Doo Wop (That Thing)" }, // Lauryn Hill - Doo Wop (That Thing)
+  { id: "uB1D9wWxd2w", label: "Mark Morrison — Return of the Mack" }, // Mark Morrison - Return of the Mack
+  { id: "LlZydtG3xqI", label: "TLC — Creep" }, // TLC - Creep
+  { id: "lmc21V-zBq0", label: "Woodkid - Run Boy Run" }, // Woodkid - Run Boy Run
+  { id: "g2gy1Evb1Kg", label: "TLC — Unpretty" }, // TLC - Unpretty
+  { id: "_CL6n0FJZpk", label: "Dr. Dre — Still D.R.E." }, // Dr. Dre - Still D.R.E.
+  { id: "gOMhN-hfMtY", label: "Eminem — Stan" }, // Eminem - Stan
+  { id: "PTFwQP86BRs", label: "Nine Inch Nails - Closer" }, // Nine Inch Nails - Closer
+  { id: "u0cS1FaKPWY", label: "Björk - All Is Full Of Love" }, // björk - all is full of love
+  { id: "xFYQQPAOz7Y", label: "Eminem — Lose Yourself" }, // Eminem - Lose Yourself
+  { id: "UDApZhXTpH8", label: "50 Cent — P.I.M.P." }, // 50 Cent - P.I.M.P.
+  { id: "WpYeekQkAdc", label: "The Black Eyed Peas — Where Is the Love?" }, // The Black Eyed Peas - Where Is the Love?
+  { id: "IKqV7DB8Iwg", label: "The Black Eyed Peas — Let's Get It Started" }, // The Black Eyed Peas - Let's Get It Started
+  { id: "FPoKiGQzbSQ", label: "Missy Elliott — Get Ur Freak On" }, // Missy Elliott - Get Ur Freak On
+  { id: "kYKI8tAELXY", label: "Missy Elliott — Gossip Folks" }, // Missy Elliott - Gossip Folks
+  { id: "KO_3Qgib6RQ", label: "Missy Elliott — WTF" }, // Missy Elliott - WTF
+  { id: "9rOKdATrV4g", label: "Missy Elliott — Throw It Back" }, // Missy Elliott - Throw It Back
+  { id: "u5CVsCnxyXg", label: "Radiohead — No Surprises" }, // Radiohead - No Surprises
+  { id: "WDswiT87oo8", label: "Blur — Girls & Boys" }, // Blur - Girls & Boys
+  { id: "6oqXVx3sBOk", label: "Blur — Coffee & TV" }, // Blur - Coffee And TV
+  { id: "r8OipmKFDeM", label: "Oasis — Don't Look Back in Anger" }, // Oasis - Don't Look Back in Anger
+  { id: "ftQ9PoOY_jQ", label: "Oasis — I'm Outta Time" }, // Oasis - I'm Outta Time
+  { id: "yuTMWgOduFM", label: "Pulp — Common People" }, // Pulp - Common People
+  { id: "ToQ0n3itoII", label: "The Verve — The Drugs Don't Work" }, // The Verve - The Drugs Don't Work
+  { id: "n6P0SitRwy8", label: "Nirvana — Heart-Shaped Box" }, // Nirvana - Heart-Shaped Box
+  { id: "1VQ_3sBZEm0", label: "Foo Fighters — Learn to Fly" }, // Foo Fighters - Learn to Fly
+  { id: "eBG7P-K-r1Y", label: "Foo Fighters — Everlong" }, // Foo Fighters - Everlong
+  { id: "EqWRaAF6_WY", label: "Foo Fighters — My Hero" }, // Foo Fighters - My Hero
+  { id: "c7RUeMCZL3Q", label: "Against Me! - I Was A Teenage Anarchist" }, //  Against Me! - "I Was A Teenage Anarchist
+  { id: "NUTGr5t3MoY", label: "Green Day — Basket Case" }, // Green Day - Basket Case
+  { id: "i8dh9gDzmz8", label: "Green Day — When I Come Around" }, // Green Day - When I Come Around
+  { id: "CnQ8N1KacJc", label: "Green Day - Good Riddance" }, // Green Day - Good Riddance
+  { id: "Ee_uujKuJMI", label: "Green Day — American Idiot" }, // Green Day - American Idiot
+  { id: "9Ht5RZpzPqw", label: "Blink-182 — All the Small Things" }, // Blink-182 - All the Small Things
+  { id: "K7l5ZeVVoCA", label: "Blink-182 — What's My Age Again?" }, // Blink-182 - What's My Age Again?
+  { id: "QtTR-_Klcq8", label: "The Offspring — Pretty Fly (for a White Guy)" }, // The Offspring - Pretty Fly (for a White Guy)
+  { id: "HwRL1LNVTLI", label: "The Offspring — Hit That" }, // The Offspring - Hit That
+  { id: "kemivUKb4f4", label: "Weezer — Buddy Holly" }, // Weezer - Buddy Holly
+  { id: "mzJj5-lubeM", label: "Red Hot Chili Peppers — Scar Tissue" }, // Red Hot Chili Peppers - Scar Tissue
+  { id: "rn_YodiJO6k", label: "Red Hot Chili Peppers — Otherside" }, // Red Hot Chili Peppers - Otherside
+  { id: "8DyziWtkfBw", label: "Red Hot Chili Peppers — Can't Stop" }, // Red Hot Chili Peppers - Can't Stop
+  { id: "_nQhGR0K8M", label: "TOOL - Parabola" }, // TOOL - Parabola
+  { id: "RQa7SvVCdZk", label: "Christina Aguilera — Lady Marmalade" }, // Christina Aguilera Lady Marmalade
+  { id: "PstrAfoMKlc", label: "Christina Aguilera — Fighter" }, // Christina Aguilera Fighter
+  { id: "eAfyFTzZDMM", label: "Christina Aguilera — Beautiful" }, // Christina Aguilera Beautiful
+  { id: "qex0OjXolzc", label: "Limp Bizkit — Boiler" }, // Limp Bizkit - Boiler
+  { id: "j0lSpNtjPM8", label: "Papa Roach — Last Resort" }, // Papa Roach - Last Resort
+  { id: "8-r-V0uK4u0", label: "The Smashing Pumpkins — Bullet with Butterfly Wings" }, // The Smashing Pumpkins - Bullet with Butterfly Wings
+  { id: "z3YMxM1_S48", label: "Moby — Natural Blues" }, // Moby - Natural Blues
+  { id: "NU9JoFKlaZ0", label: "Green Day - Wake Me Up When September Ends" }, // Green Day - Wake Me Up When September Ends
+  { id: "EWb8oUwubWg", label: "Snakehips - Forever" }, // Snakehips - Forever
+  { id: "oSPT27XyY1U", label: "Kill The Noise & Feed Me - I Do Coke" }, // Kill The Noise & Feed Me - I Do Coke
+  { id: "tgIqecROs5M", label: "AWOLNATION - Sail " }, // AWOLNATION - Sail 
+  { id: "N5XVeENmLMk", label: "Fujiya & Miyagi Ankle Injuries" }, // Fujiya & Miyagi Ankle Injuries
+  { id: "5Euj9f3gdyM", label: "Arcade Fire - The Suburbs" }, // Arcade Fire - The Suburbs
+  { id: "Rgox84KE7iY", label: "Biting Elbows - Bad Motherfucker" }, // Biting Elbows - Bad Motherfucker
+  { id: "BRaGuQR6L5c", label: "Hot Sugar - Not Afraid to Die" }, // Hot Sugar - Not Afraid to Die
+  { id: "jREZtQU0ktk", label: "Young Juvenile Youth - Animation" }, // Young Juvenile Youth - Animation
+  { id: "xnP7qKxwzjg", label: "Tame Impala - Dracula " }, // Tame Impala - Dracula 
+  { id: "IfLqsNRkBIo", label: "Flume - Some Minds" }, // Flume - Some Minds
+  { id: "2_HXUhShhmY", label: "Oren Lavie - Her Morning Elegance" }, // Oren Lavie - Her Morning Elegance
+  { id: "WCNQ2mc_Zzc", label: "Miike Snow - Paddling Out" }, // Miike Snow - Paddling Out
+  { id: "Gxu248aD6PY", label: "Justice - New Lands" }, // Justice - New Lands
+  { id: "eu0KsZ_MVBc", label: "The Avalanches - Because I'm Me" }, // The Avalanches - Because I'm Me
+  { id: "qLrnkK2YEcE", label: "The Avalanches - Frontier Psychiatrist " }, // The Avalanches - Frontier Psychiatrist 
+  { id: "s5FyfQDO5g0", label: "The Chemical Brothers - Let Forever Be" }, // The Chemical Brothers - Let Forever Be
+  { id: "5rAOyh7YmEc", label: "Basement Jaxx - Where's Your Head At " }, // Basement Jaxx - Where's Your Head At 
+  { id: "mDFBTdToRmw", label: "LITTLE BIG – SKIBIDI" }, // LITTLE BIG – SKIBIDI
+  { id: "h3pJZSTQqIg", label: "Coldplay - Strawberry Swing" }, // Coldplay - Strawberry Swing
+  { id: "oMxAEn3Owlg", label: "The Cast Of Cheers - Animals" }, // The Cast Of Cheers - Animals
+  { id: "jrqMdja4eYs", label: "Led Zeppelin - What Is And What Should Never Be" }, // Led Zeppelin - What Is And What Should Never Be
+  { id: "IbPWe24jQ9A", label: "Mykki Blanco - Loner" }, // Mykki Blanco feat. Jean Deaux - "Loner"
+  { id: "1wl5BbUg05M", label: "Valentino Khan - Deep Down Low" }, // Valentino Khan - Deep Down Low
+  { id: "LHPKOy3dtqQ", label: "Green Day - Revolution Radio" }, // Green Day - Revolution Radio
+  { id: "lOPPl_liDGU", label: "Noah - Flaw" }, // Noah - Flaw 
+  { id: "WF34N4gJAKE", label: "Bonobo - Cirrus" }, // Bonobo - Cirrus
+  { id: "wl6k_h2drK8", label: "Miike Snow - My Trigger" }, // Miike Snow - My Trigger
+  { id: "1EPHbkE_YRw", label: "MorMor - Far Apart" }, // MorMor - Far Apart
+    ];
+
+    /*****************************************************************
+     * SKINS
+     *****************************************************************/
+    const SKINS = {
+      tv01: {
+        artW: 3000,
+        artH: 1980,
+        assets: {
+          shell: "assets/skins/tv01/tv01_shell.png",
+          dial:  "assets/skins/tv01/tv01_dial.png",
+          play:    { normal: "assets/skins/tv01/tv01_btn_play.png",    hover: "assets/skins/tv01/tv01_btn_play_hover.png" },
+          restart: { normal: "assets/skins/tv01/tv01_btn_restart.png", hover: "assets/skins/tv01/tv01_btn_restart_hover.png" },
+          next:    { normal: "assets/skins/tv01/tv01_btn_next.png",    hover: "assets/skins/tv01/tv01_btn_next_hover.png" },
+          power:   { off: "assets/skins/tv01/tv01_btn_power_off.png", on: "assets/skins/tv01/tv01_btn_power_on.png" }
+        },
+        titleStyle: { fontSize: 30, color: "#FFF", opacity: 0.95, shadow: false, bg: true, fontFamily: '"Chicle", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif' },
+        layout: {
+          screen:  { x:170,  y:170,  w:2300, h:1620, r:40 },
+          dial:    { x:2650, y:134,  w:220,  h:220  },
+          play:    { x:2700, y:640,  w:120,  h:150  },
+          restart: { x:2700, y:935,  w:120,  h:150  },
+          next:    { x:2700, y:1200, w:120,  h:150  },
+          power:   { x:2656, y:1655, w:220,  h:100  },
+          title: { x: 270, y: 2020, w: 2300, h: 120, align: "center" }
+        }
+      }
+    };
+
+    /*****************************************************************
+     * STATE
+     *****************************************************************/
+    let player = null;
+    let playerReady = false;
+    let poweredOn = false;
+    let startedOnce = false;
+    let currentIndex = 0;
+    let bgIndex = 0;
+    let volValue = 50;
+    let activeSkin = null;
+
+    const recent = [];
+    const badIds = new Set();
+
+    const bg = document.getElementById("bg");
+    const staticFx = document.getElementById("staticFx");
+    const screenOff = document.getElementById("screenOff");
+    const volDialEl = document.getElementById("volDial");
+
+    const btnPower = document.getElementById("btnPower");
+    const btnPlay = document.getElementById("btnPlay");
+    const btnRestart = document.getElementById("btnRestart");
+    const btnNext = document.getElementById("btnNext");
+
+    const nowPlayingEl = document.getElementById("nowPlaying");
+
+    /*****************************************************************
+     * Pause cover (thumbnail hack)
+     *****************************************************************/
+    const pauseCover = document.getElementById("pauseCover");
+    const pauseImg   = document.getElementById("pauseImg");
+
+    function thumbCandidates(videoId){
+      return [
+        `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+        `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      ];
+    }
+
+    async function setPauseCoverImage(videoId){
+      if (!pauseImg || !isLikelyYouTubeId(videoId)) return;
+
+      const urls = thumbCandidates(videoId);
+
+      // Try each until one loads
+      for (const url of urls){
+        const ok = await new Promise(resolve => {
+          const img = new Image();
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(false);
+          img.src = url;
+        });
+        if (ok){
+          pauseImg.style.backgroundImage = `url("${url}")`;
+          return;
+        }
+      }
+
+      // Fallback if all fail
+      pauseImg.style.backgroundImage = "none";
+      pauseImg.style.background = "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(0,0,0,0.2))";
+    }
+
+    function currentYtVideoId(){
+      try{
+        const d = (yt && yt.getVideoData) ? (yt.getVideoData() || {}) : {};
+        const vid = d.video_id || d.videoId || null;
+        if (isLikelyYouTubeId(vid)) return vid;
+      }catch(e){}
+      const fallback = VIDEO_LIST[currentIndex]?.id;
+      return isLikelyYouTubeId(fallback) ? fallback : null;
+    }
+
+    function showCoverHold(){
+      if (!pauseCover) return;
+      pauseCover.classList.add("on");
+      pauseCover.classList.remove("preview");
+    }
+
+    function showCoverPreview(){
+      if (!pauseCover) return;
+      pauseCover.classList.add("preview");
+      pauseCover.classList.remove("on");
+    }
+
+    function hideCoverSmooth(){
+      if (!pauseCover) return;
+      pauseCover.classList.remove("on");
+      pauseCover.classList.remove("preview");
+    }
+
+    function previewIfPlaying(){
+      if (!pauseCover || !poweredOn || !playerReady || !yt) return;
+      const st = yt.getPlayerState();
+      if (st === YT.PlayerState.PLAYING){
+        const vid = currentYtVideoId();
+        if (vid) setPauseCoverImage(vid);
+        showCoverPreview();
+      }
+    }
+
+    function clearPreviewIfNotPaused(){
+      if (!pauseCover || !yt) return;
+      const st = yt.getPlayerState();
+      if (st === YT.PlayerState.PAUSED) return; // keep cover while paused
+      hideCoverSmooth();
+    }
+
+    // Clicking the cover resumes playback (when paused)
+    if (pauseCover){
+      pauseCover.addEventListener("click", () => {
+        if (!poweredOn || !player || !playerReady) return;
+        hideCoverSmooth();
+        player.play();
+      });
+    }
+
+
+    // Disable controls until the YouTube player signals it is ready
+    btnPower.disabled = true; // until player is ready
+
+    function clamp(n,a,b){ return Math.min(b, Math.max(a,n)); }
+    function uiVolToDm(v){ return clamp(v/100, 0, 1); }
+
+    // YouTube player handle (raw) + lightweight adapter to keep old code working
+    let yt = null;
+
+    function isLikelyYouTubeId(id){
+      return typeof id === "string" && /^[a-zA-Z0-9_-]{11}$/.test(id);
+    }
+
+    function findAnyValidIndex(){
+      const valid = [];
+      for (let i = 0; i < VIDEO_LIST.length; i++){
+        if (isLikelyYouTubeId(VIDEO_LIST[i]?.id)) valid.push(i);
+      }
+      if (!valid.length) return -1;
+      return valid[Math.floor(Math.random() * valid.length)];
+    }
+
+    function wrapYouTubePlayer(ytPlayer){
+      yt = ytPlayer;
+
+      // Adapter methods mimic the Dailymotion player API used below
+      player = {
+        loadContent: ({ video, startTime }) => new Promise((resolve, reject) => {
+          if (!yt) return reject(new Error("YT not ready"));
+          if (!isLikelyYouTubeId(video)) return reject(new Error("Invalid YouTube videoId: " + video));
+          try{
+            yt.loadVideoById({
+              videoId: video,
+              startSeconds: Math.max(0, Number(startTime) || 0)
+            });
+            resolve(); // errors are handled by onError
+          }catch(e){ reject(e); }
+        }),
+        play: () => Promise.resolve().then(() => yt && yt.playVideo()),
+        pause: () => Promise.resolve().then(() => yt && yt.pauseVideo()),
+        seek: (t) => Promise.resolve().then(() => yt && yt.seekTo(Math.max(0, Number(t) || 0), true)),
+        setMute: (m) => Promise.resolve().then(() => {
+          if (!yt) return;
+          (m ? yt.mute() : yt.unMute());
+        }),
+        setVolume: (v01) => Promise.resolve().then(() => {
+          if (!yt) return;
+          // Legacy code passes 0..1 (uiVolToDm), convert to 0..100 for YouTube
+          const v = Number(v01);
+          const vol = clamp(Math.round((v <= 1 ? v * 100 : v)), 0, 100);
+          yt.setVolume(vol);
+        }),
+        getState: () => Promise.resolve().then(() => {
+          if (!yt) return { playerIsPlaying:false, videoTitle:"" };
+          const state = yt.getPlayerState();
+          const data = yt.getVideoData ? yt.getVideoData() : {};
+          return {
+            playerIsPlaying: state === YT.PlayerState.PLAYING,
+            videoTitle: (data && data.title) ? data.title : "—"
+          };
+        })
+      };
+    }
+
+    function getYtIframe(){
+      const el = document.getElementById("dm-player");
+      if (!el) return null;
+      if (el.tagName === "IFRAME") return el;
+      return el.querySelector("iframe");
+    }
+
+    function ensurePauseCoverLayering(){
+      const sw = document.getElementById("screenWindow");
+      const off = document.getElementById("screenOff");
+      if (!sw || !pauseCover || !off) return;
+
+      // Keep pauseCover above the player, but still below screenOff/staticFx
+      if (pauseCover.parentElement === sw && pauseCover.nextElementSibling !== off){
+        sw.insertBefore(pauseCover, off);
+      }
+    }
+
+    function forceYouTubeIframeFill(){
+      // The YouTube API sometimes replaces the target node with an <iframe id="dm-player">.
+      // This handles both cases: (1) dm-player is a div containing an iframe, or (2) dm-player is the iframe.
+      const el = document.getElementById("dm-player");
+      if (el){
+        el.style.position = "absolute";
+        el.style.inset = "0";
+        el.style.width = "100%";
+        el.style.height = "100%";
+        el.style.border = "0";
+        el.style.display = "block";
+        el.style.pointerEvents = "none";
+        el.style.zIndex = "1";
+      }
+
+      const iframe = getYtIframe();
+      if (!iframe) return;
+
+      iframe.style.position = "absolute";
+      iframe.style.inset = "0";
+      iframe.style.width = "100%";
+      iframe.style.height = "100%";
+      iframe.style.border = "0";
+      iframe.style.display = "block";
+      iframe.style.pointerEvents = "none";
+      iframe.style.zIndex = "1";
+      iframe.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    }
+
+
+    function flashStatic(ms=160){
+      staticFx.classList.add("on");
+      setTimeout(()=>staticFx.classList.remove("on"), ms);
+    }
+
+
+    function setNowPlayingText(t){
+      if (!nowPlayingEl) return;
+      nowPlayingEl.textContent = t || "—";
+    }
+
+    async function updateNowPlaying(){
+      const entry = VIDEO_LIST[currentIndex];
+      if (entry && entry.label){
+        setNowPlayingText(entry.label);
+        return;
+      }
+      if (!player){
+        setNowPlayingText("—");
+        return;
+      }
+      try{
+        const st = await player.getState();
+        setNowPlayingText(st?.videoTitle || "—");
+      }catch(e){
+        setNowPlayingText("—");
+      }
+    }
+
+
+    function applyBackground(){
+      if (!BACKGROUNDS.length) return;
+      const url = BACKGROUNDS[bgIndex % BACKGROUNDS.length];
+      bg.style.backgroundImage =
+        `radial-gradient(1200px 800px at 55% 35%, rgba(0,240,255,0.14), transparent 55%),
+         radial-gradient(900px 600px at 30% 70%, rgba(255,255,255,0.06), transparent 60%),
+         url("${url}")`;
+      bg.style.backgroundSize = "cover";
+      bg.style.backgroundPosition = "center";
+    }
+
+    function sealEmbedInteractions(){
+      // Keep the iframe sized correctly and non-interactive
+      forceYouTubeIframeFill();
+      ensurePauseCoverLayering();
+
+      const iframe = getYtIframe();
+      if (iframe){
+        iframe.style.pointerEvents = "none";
+        iframe.setAttribute("tabindex", "-1");
+        iframe.setAttribute("aria-hidden", "true");
+      }
+    }
+
+    function sealEmbedInteractionsWhenReady(){
+      // Observe the whole screenWindow because the YT API may replace nodes
+      const sw = document.getElementById("screenWindow");
+      if (!sw) return;
+
+      const obs = new MutationObserver(() => {
+        sealEmbedInteractions();
+        if (getYtIframe()) obs.disconnect();
+      });
+
+      obs.observe(sw, { childList:true, subtree:true });
+      sealEmbedInteractions();
+      setTimeout(sealEmbedInteractions, 250);
+      setTimeout(sealEmbedInteractions, 800);
+    }
+
+
+    function place(el, rect, skin){
+      const l = (rect.x / skin.artW) * 100;
+      const t = (rect.y / skin.artH) * 100;
+      const w = (rect.w / skin.artW) * 100;
+      const h = (rect.h / skin.artH) * 100;
+      el.style.left = l + "%";
+      el.style.top = t + "%";
+      el.style.width = w + "%";
+      el.style.height = h + "%";
+    }
+
+    function applySkin(id){
+      const skin = SKINS[id];
+      if (!skin) throw new Error("Unknown skin: " + id);
+      activeSkin = skin;
+
+      document.getElementById("tvShell").src = skin.assets.shell;
+
+      const sw = document.getElementById("screenWindow");
+      place(sw, skin.layout.screen, skin);
+      sw.style.borderRadius = (skin.layout.screen.r || 0) + "px";
+
+      place(volDialEl, skin.layout.dial, skin);
+      volDialEl.style.backgroundImage = `url("${skin.assets.dial}")`;
+
+      place(btnPlay, skin.layout.play, skin);
+      btnPlay.style.setProperty("--img", `url("${skin.assets.play.normal}")`);
+      btnPlay.style.setProperty("--imgH", `url("${skin.assets.play.hover}")`);
+
+      place(btnRestart, skin.layout.restart, skin);
+      btnRestart.style.setProperty("--img", `url("${skin.assets.restart.normal}")`);
+      btnRestart.style.setProperty("--imgH", `url("${skin.assets.restart.hover}")`);
+
+      place(btnNext, skin.layout.next, skin);
+      btnNext.style.setProperty("--img", `url("${skin.assets.next.normal}")`);
+      btnNext.style.setProperty("--imgH", `url("${skin.assets.next.hover}")`);
+
+      place(btnPower, skin.layout.power, skin);
+
+      const title = document.getElementById("nowPlaying");
+
+      if (skin.layout.title && title){
+        place(title, skin.layout.title, skin);
+        title.style.textAlign = skin.layout.title.align || "center";
+      }
+
+      if (skin.titleStyle && title){
+        if (skin.titleStyle.fontSize) title.style.fontSize = skin.titleStyle.fontSize + "px";
+        if (skin.titleStyle.color) title.style.color = skin.titleStyle.color;
+        if (skin.titleStyle.opacity != null) title.style.opacity = skin.titleStyle.opacity;
+        if (skin.titleStyle.fontFamily) title.style.fontFamily = skin.titleStyle.fontFamily;
+        title.style.textShadow = skin.titleStyle.shadow === false 
+        ? "none"
+        : "0 10px 24px rgba(0,0,0,0.45)";
+      }
+
+      renderPowerButton();
+      setDialFromValue(volValue);
+    }
+
+    function renderPowerButton(){
+      if (!activeSkin) return;
+      btnPower.style.backgroundImage = `url("${poweredOn ? activeSkin.assets.power.on : activeSkin.assets.power.off}")`;
+    }
+
+    function setPowerUI(on){
+      poweredOn = !!on;
+      screenOff.classList.toggle("on", !poweredOn);
+      renderPowerButton();
+      
+            // Keep the pause cover from lingering when the TV is OFF
+      if (!poweredOn) hideCoverSmooth();
+if (nowPlayingEl) nowPlayingEl.style.display = poweredOn ? "block" : "none";
+    }
+
+    function setDialFromValue(v){
+      const ang = -135 + (clamp(v,0,100) / 100) * 270;
+      volDialEl.style.setProperty("--rot", ang + "deg");
+    }
+
+    async function setVolume(v){
+      volValue = clamp(Number(v), 0, 100);
+      setDialFromValue(volValue);
+      if (!player) return;
+
+      try{
+        await player.setVolume(uiVolToDm(volValue));
+        if (volValue > 0) await player.setMute(false);
+      }catch(e){}
+    }
+
+    // ---- Better random with spacing ----
+    function recentWindowSize(){
+      const n = VIDEO_LIST.length;
+      if (n <= 4) return 1;
+      return clamp(Math.floor(n * 0.3), 3, 10);
+    }
+    function rememberIndex(i){
+      recent.push(i);
+      const max = recentWindowSize();
+      while (recent.length > max) recent.shift();
+    }
+    function pickNextIndex(){
+      const n = VIDEO_LIST.length;
+      if (n === 0) return 0;
+      if (n === 1) return 0;
+
+      const maxTries = 60;
+      const avoid = new Set(recent);
+      avoid.add(currentIndex);
+
+      for (let t = 0; t < maxTries; t++){
+        const i = Math.floor(Math.random() * n);
+        const id = VIDEO_LIST[i].id;
+        if (badIds.has(id)) continue;
+        if (avoid.has(i) && n > avoid.size + 1) continue;
+        return i;
+      }
+
+      for (let t = 0; t < maxTries; t++){
+        const i = Math.floor(Math.random() * n);
+        const id = VIDEO_LIST[i].id;
+        if (badIds.has(id)) continue;
+        if (i === currentIndex && n > 1) continue;
+        return i;
+      }
+      return (currentIndex + 1) % n;
+    }
+
+    async function loadIndex(i, autoPlay=true){
+      if (!player) return;
+      currentIndex = i;
+      rememberIndex(i);
+      flashStatic(180);
+
+      const id = VIDEO_LIST[currentIndex].id;
+      // Preload thumbnail for the pause cover (no await)
+      if (isLikelyYouTubeId(id)) setPauseCoverImage(id);
+      hideCoverSmooth();
+      if (!isLikelyYouTubeId(id)){
+        console.warn("Not a YouTube videoId yet (update VIDEO_LIST):", id);
+        badIds.add(id);
+        if (poweredOn) setTimeout(nextSmart, 250);
+        return;
+      }
+      try{
+        await player.loadContent({ video: id, startTime: 0 });
+        sealEmbedInteractions();
+        await updateNowPlaying();
+        if (autoPlay && poweredOn) await player.play();
+      }catch(e){
+        badIds.add(id);
+        if (poweredOn) setTimeout(nextSmart, 250);
+      }
+    }
+
+    function nextSmart(){ loadIndex(pickNextIndex(), true); }
+
+    async function restart(){
+      if (!player) return;
+      flashStatic(120);
+      sealEmbedInteractions();
+      try{
+        await player.seek(0);
+        if (poweredOn) await player.play();
+      }catch(e){}
+    }
+
+    async function togglePlayPause(){
+      if (!player) return;
+      try{
+        const st = await player.getState();
+        if (st?.playerIsPlaying) await player.pause();
+        else if (poweredOn) await player.play();
+      }catch(e){}
+    }
+
+    async function toggleFullscreen(){
+      const el = document.documentElement;
+      if (!document.fullscreenElement) {
+        try { await el.requestFullscreen(); } catch(e) {}
+      } else {
+        try { await document.exitFullscreen(); } catch(e) {}
+      }
+    }
+    // Autoplay from gesture (call play() synchronously)
+    function startPlaybackFromGesture(){
+      if (!player || !playerReady) return;
+
+      setPowerUI(true);
+      flashStatic(220);
+
+      // Make sure we’re not stuck muted, and start from the beginning when powering on
+      player.setMute(false).catch(()=>{});
+      player.seek(0).catch(()=>{});
+
+      // small "kick" volume to avoid 0-volume autoplay weirdness
+      const kick = Math.max(volValue, 10);
+      player.setVolume(uiVolToDm(kick)).catch(()=>{});
+
+      // IMPORTANT: play() happens immediately inside the click handler
+      player.play().then(() => {
+        player.setMute(false).catch(()=>{});
+        player.setVolume(uiVolToDm(volValue)).catch(()=>{});
+        updateNowPlaying();
+      }).catch((err) => {
+        console.warn("Play failed:", err);
+      });
+    }
+
+
+
+
+function powerToggleSimple(){
+  console.log("powerToggle called, poweredOn:", poweredOn, "playerReady:", playerReady);
+  
+  if (!player || !playerReady) {
+    console.warn("Player not ready");
+    return;
+  }
+
+  if (poweredOn){
+    // ON -> OFF - just pause, don't seek
+    console.log("Turning OFF");
+    setPowerUI(false);
+    flashStatic(120);
+    try { player.pause(); } catch(e) {}
+    return;
+  }
+
+  // OFF -> ON - use the same approach as startPlaybackFromGesture
+  console.log("Turning ON - attempting to play");
+  setPowerUI(true);
+  flashStatic(220);
+
+  // Make sure we're not stuck muted
+  try { player.setMute(false); } catch(e) { console.warn("setMute failed:", e); }
+
+  // small "kick" volume to avoid 0-volume autoplay weirdness
+  const kick = Math.max(volValue, 10);
+  try { player.setVolume(uiVolToDm(kick)); } catch(e) { console.warn("setVolume failed:", e); }
+
+  // IMPORTANT: play() happens immediately inside the click handler
+  console.log("Calling player.play()...");
+  const playPromise = player.play();
+  
+  if (playPromise && playPromise.then) {
+    playPromise.then(() => {
+      console.log("Play succeeded!");
+      try { player.setMute(false); } catch(e) {}
+      try { player.setVolume(uiVolToDm(volValue)); } catch(e) {}
+      updateNowPlaying();
+    }).catch((err) => {
+      console.error("Play failed:", err);
+    });
+  }
+}
+
+    /*****************************************************************
+     * Dial interaction
+     *****************************************************************/
+    let dialDragging = false;
+
+    function dialEventToValue(e){
+      const rect = volDialEl.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      const px = (e.clientX ?? (e.touches && e.touches[0].clientX)) - cx;
+      const py = (e.clientY ?? (e.touches && e.touches[0].clientY)) - cy;
+
+      let deg = Math.atan2(py, px) * 180 / Math.PI;
+      deg = clamp(deg, -135, 135);
+      return ((deg + 135) / 270) * 100;
+    }
+
+    function onDialMove(e){
+      if (!dialDragging) return;
+      e.preventDefault();
+      setVolume(dialEventToValue(e));
+    }
+
+    volDialEl.addEventListener("pointerdown", (e) => {
+      dialDragging = true;
+      volDialEl.setPointerCapture(e.pointerId);
+      onDialMove(e);
+    });
+    volDialEl.addEventListener("pointermove", onDialMove);
+    volDialEl.addEventListener("pointerup", () => dialDragging = false);
+    volDialEl.addEventListener("pointercancel", () => dialDragging = false);
+
+    volDialEl.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const step = e.deltaY > 0 ? -2 : 2;
+      setVolume(volValue + step);
+    }, { passive:false });
+
+    /*****************************************************************
+     * Events
+     *****************************************************************/
+    document.getElementById("bgBtn").addEventListener("click", () => { bgIndex++; applyBackground(); });
+    document.getElementById("fsBtn").addEventListener("click", toggleFullscreen);
+
+    
+    btnPower.addEventListener("click", powerToggleSimple);
+
+    // Play/Pause: show the glitched thumbnail frame on hover (preview),
+    // and show it instantly on press to hide any YouTube pause UI flash.
+
+    let suppressNextPlayClick = false;
+
+    btnPlay.addEventListener("pointerdown", (e) => {
+      if (!poweredOn || !player || !playerReady || !yt) return;
+      const st = yt.getPlayerState();
+      if (st === YT.PlayerState.PLAYING){
+        // Paint cover BEFORE pausing (prevents the YouTube overlay flashing)
+        e.preventDefault();
+        suppressNextPlayClick = true;
+
+        const vid = currentYtVideoId();
+        if (vid) setPauseCoverImage(vid);
+        showCoverHold();
+
+        // Pause immediately (next frame) so the cover is already up
+        requestAnimationFrame(() => player.pause());
+      }
+    });
+
+
+    function togglePlayPauseWithCover(){
+      if (!poweredOn || !player || !playerReady || !yt) return;
+      const st = yt.getPlayerState();
+      if (st === YT.PlayerState.PLAYING){
+        const vid = currentYtVideoId();
+        if (vid) setPauseCoverImage(vid);
+        showCoverHold();
+        requestAnimationFrame(() => player.pause());
+      } else {
+        hideCoverSmooth();
+        player.play();
+      }
+    }
+
+    btnPlay.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (suppressNextPlayClick){
+        suppressNextPlayClick = false;
+        return; // pause already handled on pointerdown
+      }
+      togglePlayPauseWithCover();
+    });
+
+
+    btnRestart.addEventListener("click", restart);
+    btnNext.addEventListener("click", nextSmart);
+window.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+      if (e.code === "Space") { e.preventDefault(); togglePlayPauseWithCover(); }
+      if (k === "n") nextSmart();
+      if (k === "r") restart();
+      if (k === "b") { bgIndex++; applyBackground(); }
+      if (k === "f") toggleFullscreen();
+    });
+
+    /*****************************************************************
+     * Boot
+     *****************************************************************/
+    async function boot(){
+      applyBackground();
+      applySkin("tv01");
+      setNowPlayingText("TEST — if you see this, placement works");
+      setPowerUI(false);
+      // Pick a starting song (prefer entries that already look like YouTube IDs)
+      const picked = findAnyValidIndex();
+      currentIndex = (picked >= 0) ? picked : Math.floor(Math.random() * VIDEO_LIST.length);
+      rememberIndex(currentIndex);
+      // Allow quick testing while migrating IDs:
+      // Open the page like: index3_fixed_v2_youtube.html?videoId=Qh8QwVYOSVU
+      const urlVid = new URLSearchParams(location.search).get("videoId");
+      const initialVideoId = (urlVid && isLikelyYouTubeId(urlVid))
+        ? urlVid
+        : (isLikelyYouTubeId(VIDEO_LIST[currentIndex]?.id) ? VIDEO_LIST[currentIndex].id : "Qh8QwVYOSVU");
+
+      if (!isLikelyYouTubeId(VIDEO_LIST[currentIndex]?.id) && !(urlVid && isLikelyYouTubeId(urlVid))){
+        // Keep it visible on the TV so it’s obvious what’s happening.
+        setNowPlayingText("DEMO — replace VIDEO_LIST IDs with YouTube videoIds");
+      }
+
+      btnPower.disabled = true;
+
+      // Create YouTube player (same slot where Dailymotion used to be)
+      const ytPlayer = new YT.Player("dm-player", {
+        host: "https://www.youtube-nocookie.com",
+        videoId: initialVideoId,
+        playerVars: {
+          playsinline: 1,
+          controls: 0,
+          rel: 0,
+          modestbranding: 1,
+          iv_load_policy: 3,
+          fs: 0,
+          origin: location.origin
+        },
+        events: {
+          onReady: () => {
+            wrapYouTubePlayer(ytPlayer);
+            sealEmbedInteractionsWhenReady();
+            forceYouTubeIframeFill();
+            setVolume(volValue);
+            // Preload thumbnail for the pause cover
+            setPauseCoverImage(initialVideoId);
+            playerReady = true;
+            btnPower.disabled = false;
+            updateNowPlaying();
+          },
+          onStateChange: (ev) => {
+            // Keep the pause cover in sync with playback state.
+            if (ev.data === YT.PlayerState.PLAYING){
+              hideCoverSmooth();
+            }
+            if (ev.data === YT.PlayerState.PAUSED){
+              if (poweredOn){
+                const vid = currentYtVideoId();
+                if (vid) setPauseCoverImage(vid);
+                showCoverHold();
+              } else {
+                hideCoverSmooth();
+              }
+            }
+
+            if (ev.data === YT.PlayerState.ENDED){
+              hideCoverSmooth();
+              if (poweredOn) nextSmart();
+            }
+          },
+          onError: (ev) => {
+            console.warn("YouTube error:", ev?.data);
+            const bad = VIDEO_LIST[currentIndex]?.id;
+            if (bad) badIds.add(bad);
+            if (poweredOn) setTimeout(nextSmart, 250);
+          }
+        }
+      });
+}
+
+    window.onYouTubeIframeAPIReady = () => boot();
+  </script>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
